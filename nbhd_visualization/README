@@ -1,1 +1,13 @@
-visualization
+Summary: Code to visualize nbhd bins
+
+Description of each script:
+
+blah.py does ....
+
+Input data:
+
+name of data, description of format, location in pettilab/shared/data_for_structure_comparison
+
+Output data:
+
+name of output, description of format, location in pettilab/shared/data_for_structure_comparison
