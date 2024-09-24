@@ -1,4 +1,16 @@
 All scripts to process data should be described here
 
+- make_query_lists.ipynb: Given a csv with many queries, this code can be used to split into smaller csvs each containing a fixed number of queries; for use with query_list_by_all.py search benchmark
+
 All data in pettilab/shared/structure_comparison should be documented in this README
 
+- pettilab/shared/structure_comparison/alphabets_blosum_coordinates
+    - allCACoord.npz stores protein name: L by 3 matrix of 3-d coordinates of the Calphas; 
+    - <alphabet_name>.npz files store protein name: array of one-hot encoding in <alphabet_name>
+    - <alphabet_name>_mat.npy file is the BLOSUM matrix for <alphabet_name>
+    - Note: all .npz should have the same keys as allCACoord.npz and the sequence lengths should be the same as the number of Calphas
+    
+
+- pettilab/shared/structure_comparison/train_test_val
+    - pairs_validation.csv: validation set pairs, includes names, TMS, and alignment
+    - test.csv/train.csv/validation.csv: contains names of proteins in respective sets
