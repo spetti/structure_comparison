@@ -113,7 +113,7 @@ if __name__ == "__main__":
     if args.blosum2_path and args.oh2_path:
         oh_d2 = np.load(args.oh2_path)
         blosum2 = np.load(args.blosum2_path).astype(float)
-        if oh_d[list(oh_d2.keys())[0]].shape[1]!=blosum2.shape[1]:
+        if oh_d2[list(oh_d2.keys())[0]].shape[1]!=blosum2.shape[1]:
             raise ValueError(f"one-hot encoding length does not match blosum2 shape {blosum2.shape[1]}")
 
     # Set parameters

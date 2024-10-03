@@ -7,7 +7,8 @@ import sys
 import os
 import csv
 
-# functions 
+
+########## FUNCTIONS FOR COMPUTING SIMILARITY MATRICES, ALIGNING, AND LDDT ################
 
 def pad_and_stack(matrices, pad_value=0):
     # pad to smallest power of 2 greater than the length of the first dimension
@@ -167,3 +168,71 @@ def lddt2(coord_1, coord_2, aln, n, query_length):
 
 v_lddt= jax.vmap(lddt2,in_axes= (None, 0, 0,0, None)) 
 vv_lddt= jax.vmap(lddt2,in_axes= (0, 0, 0,0, 0)) 
+
+
+
+def sim_mtx_blurry(nhot_1, nhot_2, tMtx):
+    
+    #compute blurry vectors 
+    A =jnp.einsum('ik,kj->ij', nhot_1, tMtx)[:,:-1]
+    B =jnp.einsum('ik,kj->ij', nhot_2, tMtx)[:,:-1]
+
+    # Expand A and B to 3D arrays for broadcasting, aligning them for element-wise minimum calculation
+    A_expanded = A[:, jnp.newaxis, :]  # Shape becomes (A_rows, 1, A_columns)
+    B_expanded = B[jnp.newaxis, :, :]  # Shape becomes (1, B_columns, B_rows)
+    
+    # Calculate the minimum for each pair of elements from A and B
+    min_elements = jnp.minimum(A_expanded, B_expanded)
+    max_elements = jnp.maximum(A_expanded,B_expanded)
+    
+    # Sum over the last dimension to get the final result
+    result = jnp.sum(min_elements, axis=2)/np.sum(max_elements, axis=2)# Shape is rows_A, rows_B, 1001
+    return result
+    
+v_sim_mtx_blurry = jax.jit(jax.vmap(sim_mtx_blurry, in_axes= (None, 0, None)))
+vv_sim_mtx_blurry = jax.jit(jax.vmap(sim_mtx_blurry, in_axes= (0, 0, None)))
+
+
+
+
+########## FUNCTIONS TO CHECK KEY AND SEQUENCE LENGTH COMPATIBILITY ################
+
+# returns protein_name: length based on some input dictionary with values of shape Lx *
+def make_name_to_length_d(oh_d):
+    name_to_length_d ={}
+    for key in oh_d.keys():
+        name_to_length_d[key]= oh_d[key].shape[0]
+    return name_to_length_d
+
+# returns keys that are not in both dictionaries
+def check_keys(oh_d, coord_d):
+    match = oh_d.keys()==coord_d.keys()
+    if match:
+        print("all keys match")
+        return []
+    else:
+        b1 = oh_d.keys()-coord_d.keys()
+        b2 = coord_d.keys()-oh_d.keys()
+        print("in hot_d but not coord_d:")
+        print(b1)
+        print("in coord_d but not hot_d:")
+        print(b2)
+        return list(b1) + list(b2)
+
+# checks whether proteins in the common set of keys are reported to be the same in each dictionary
+def check_lengths(d1,d2):
+    bad_list = []
+    for key in set(d1.keys()):
+        l1 = d1[key]
+        l2 = d2.get(key,-1)
+        if l2 >0:
+            if l1!= l2:
+                print(f"lengths of {key} differ: {l1},{l2}")
+                bad_list.append(key)
+    return bad_list
+
+def check_keys_and_lengths(hot_d, coord_d):
+    bad_list = check_keys(hot_d, coord_d)
+    bad_list+=check_lengths(make_name_to_length_d(hot_d),make_name_to_length_d(coord_d))
+    return bad_list
+              
