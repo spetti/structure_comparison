@@ -80,8 +80,8 @@ def parse_arguments():
 
     
     # Optional arguments with default values for gap penalties and output location
-    parser.add_argument('--gap_open', type=int, default=-10, help="Gap opening penalty (default: -10)")
-    parser.add_argument('--gap_extend', type=int, default=-2, help="Gap extension penalty (default: -2)")
+    parser.add_argument('--gap_open', type=float, default=-10, help="Gap opening penalty (default: -10)")
+    parser.add_argument('--gap_extend', type=float, default=-2, help="Gap extension penalty (default: -2)")
     parser.add_argument('--out_location', type=str, default="./results", help="specify where output files will go")
 
     # Parsing arguments
@@ -103,14 +103,18 @@ if __name__ == "__main__":
     # Parse the arguments
     args = parse_arguments()
     
-    # Load relevant data
+    # Load relevant data and check dimensions of one example
     coord_d = np.load(args.coord_path)
     oh_d = np.load(args.oh_path)
-    blosum = np.load(args.blosum_path)[:-1,:-1].astype(float)
+    blosum = np.load(args.blosum_path).astype(float)
     query_list = load_csv_to_list(args.query_list_path)
+    if oh_d[list(oh_d.keys())[0]].shape[1]!=blosum.shape[1]:
+        raise ValueError(f"one-hot encoding length does not match blosum shape {blosum.shape[1]}")
     if args.blosum2_path and args.oh2_path:
         oh_d2 = np.load(args.oh2_path)
-        blosum2 = np.load(args.blosum2_path)[:-1,:-1].astype(float)
+        blosum2 = np.load(args.blosum2_path).astype(float)
+        if oh_d[list(oh_d2.keys())[0]].shape[1]!=blosum2.shape[1]:
+            raise ValueError(f"one-hot encoding length does not match blosum2 shape {blosum2.shape[1]}")
 
     # Set parameters
     params={}
