@@ -147,7 +147,7 @@ def lddt2(coord_1, coord_2, aln, n, query_length):
     reduced_coord_1 = jnp.zeros_like(coord_1)
     reduced_coord_1 = reduced_coord_1.at[:len(row_indices)].set(jnp.take(coord_1, row_indices, axis=0))
     reduced_coord_2 = jnp.zeros_like(coord_2)
-    reduced_coord_2 = reduced_coord_1.at[:len(col_indices)].set(jnp.take(coord_2, col_indices, axis=0))
+    reduced_coord_2 = reduced_coord_2.at[:len(col_indices)].set(jnp.take(coord_2, col_indices, axis=0))
 
     # Compute distance differences
     pw_1 = pw(reduced_coord_1)
@@ -166,8 +166,8 @@ def lddt2(coord_1, coord_2, aln, n, query_length):
     #return num/denom, unless denom is zero
     return jnp.where(denom != 0, num / denom, 0)
 
-v_lddt= jax.vmap(lddt2,in_axes= (None, 0, 0,0, None)) 
-vv_lddt= jax.vmap(lddt2,in_axes= (0, 0, 0,0, 0)) 
+v_lddt= jax.jit(jax.vmap(lddt2,in_axes= (None, 0, 0,0, None))) 
+vv_lddt= jax.jit(jax.vmap(lddt2,in_axes= (0, 0, 0,0, 0))) 
 
 
 
@@ -186,7 +186,7 @@ def sim_mtx_blurry(nhot_1, nhot_2, tMtx):
     max_elements = jnp.maximum(A_expanded,B_expanded)
     
     # Sum over the last dimension to get the final result
-    result = jnp.sum(min_elements, axis=2)/np.sum(max_elements, axis=2)# Shape is rows_A, rows_B, 1001
+    result = jnp.sum(min_elements, axis=2)/jnp.where(jnp.sum(max_elements, axis=2)==0, -1,jnp.sum(max_elements, axis=2)) # Shape is rows_A, rows_B, 1001
     return result
     
 v_sim_mtx_blurry = jax.jit(jax.vmap(sim_mtx_blurry, in_axes= (None, 0, None)))
