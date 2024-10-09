@@ -143,10 +143,10 @@ def lddt2(coord_1, coord_2, aln, n, query_length):
     denom =4*(jnp.sum(jnp.where(pw_1 <15,1,0)*mask)- query_length)/2
     
     # Reduce so that only aligned positions appear first
-    row_indices, col_indices = jnp.where(aln > 0.95, size = pw_1.shape[0], fill_value =0)
+    row_indices, col_indices = jnp.where(aln > 0.95, size = pw_1.shape[0], fill_value =0) #will have length coord_1
     reduced_coord_1 = jnp.zeros_like(coord_1)
     reduced_coord_1 = reduced_coord_1.at[:len(row_indices)].set(jnp.take(coord_1, row_indices, axis=0))
-    reduced_coord_2 = jnp.zeros_like(coord_2)
+    reduced_coord_2 = jnp.zeros_like(coord_1) # only need to be min of the two seq lengths; so ok to do coord_1 shape
     reduced_coord_2 = reduced_coord_2.at[:len(col_indices)].set(jnp.take(coord_2, col_indices, axis=0))
 
     # Compute distance differences
@@ -168,6 +168,8 @@ def lddt2(coord_1, coord_2, aln, n, query_length):
 
 v_lddt= jax.jit(jax.vmap(lddt2,in_axes= (None, 0, 0,0, None))) 
 vv_lddt= jax.jit(jax.vmap(lddt2,in_axes= (0, 0, 0,0, 0))) 
+#v_lddt= jax.vmap(lddt2,in_axes= (None, 0, 0,0, None))
+#vv_lddt= jax.vmap(lddt2,in_axes= (0, 0, 0,0, 0))
 
 
 
