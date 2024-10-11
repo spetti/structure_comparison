@@ -195,7 +195,25 @@ v_sim_mtx_blurry = jax.jit(jax.vmap(sim_mtx_blurry, in_axes= (None, 0, None)))
 vv_sim_mtx_blurry = jax.jit(jax.vmap(sim_mtx_blurry, in_axes= (0, 0, None)))
 
 
+def replace_jaccard_w_blosum_score(matrix, replacement_list):
+    # blosum list is length 100
+    #if replacement_list.shape[0]!=100:
+    #    raise ValueError("only for 100 now")
+    
+    # Create a matrix of bounds
+    lower_bounds = jnp.arange(0, 1, 0.01)  # Lower bounds: 0, 0.01, 0.02, ..., 0.99
+    upper_bounds = jnp.array(list(lower_bounds)[1:]+[1.0])  # Upper bounds: 0.01, 0.02, ..., 1.00
 
+    # Create a mask for the ranges
+    # We will create a 2D array that checks if matrix values are in the respective ranges
+    mask = (matrix[..., None] > lower_bounds) & (matrix[..., None] <= upper_bounds)
+
+    # Use jnp.where to replace values based on the mask
+    # Sum over the first axis to get the indices of the replacement values
+    # This will give us an array of shape of the matrix, filled with appropriate replacements
+    return jnp.where(mask, replacement_list, 0).sum(axis=-1)
+
+v_replace_jaccard_w_blosum_score = jax.jit(jax.vmap(replace_jaccard_w_blosum_score, in_axes=(0, None)))
 
 ########## FUNCTIONS TO CHECK KEY AND SEQUENCE LENGTH COMPATIBILITY ################
 
