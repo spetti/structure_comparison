@@ -15,20 +15,27 @@ from utils import *
 
 #export data=/cluster/tufts/pettilab/shared/structure_comparison_data
 
-# python query_list_by_all.py $data/alphabets_blosum_coordinates/allCACoord.npz $data/train_test_val/short_test_query_list.csv $data/alphabets_blosum_coordinates/nH_mat.npy $data/alphabets_blosum_coordinates/nH_oh.npz --out_location test_results_3Dn
+# python query_list_by_all.py $data/alphabets_blosum_coordinates/allCACoord.npz $data/small_test_queries_by_10/query_list_1.csv  $data/alphabets_blosum_coordinates/MSE/MSE.npy $data/alphabets_blosum_coordinates/MSE/MSE.npz --out_location test_results --lam 0.318 --k 0.269 
 
-#python query_list_by_all.py ./data/allCACoord.npz ./data/short_test_query_list.csv ./data/nH_mat.npy ./data/nH_oh.npz --blosum2_path ./data/nH_mat.npy --oh2_path ./data/nH_oh.npz --w1 1.0 --w2 1.0 --gap_open -10 --gap_extend -2 --out_location test_results_3Di_3Dn
+#0.3178780674934387 0.2689192327152678
+
+#python query_list_by_all.py $data/allCACoord.npz $data/small_test_queries_by_10/query_list_1.csv ./data/nH_mat.npy ./data/nH_oh.npz --blosum2_path ./data/nH_mat.npy --oh2_path ./data/nH_oh.npz --w1 1.0 --w2 1.0 --gap_open -10 --gap_extend -2 --out_location test_results_3Di_3Dn
+
+#python query_list_by_all.py $data/alphabets_blosum_coordinates/allCACoord.npz $data/small_test_queries_by_10/query_list_1.csv $data/alphabets_blosum_coordinates/transition_mtx.npy $data/alphabets_blosum_coordinates/blurry_vecs.npz --jaccard_blosum_list $data/alphabets_blosum_coordinates/jaccard_blosum.npy --out_location test_results_BV
 
 # functions 
 
 
 def run_in_batches(query, long_list, batch_size, params):
-    result = []
+    lddts = []
+    scores = []
     for i in range(0, len(long_list), batch_size):
         batch = long_list[i:i + batch_size]  # Get the current batch
-        result.extend(run_batch(query,batch, params))   # Process and extend results
+        ls, ss = run_batch(query,batch, params)
+        lddts.extend(ls)
+        scores.extend(ss)
         #print(f"finished batch {i}")
-    return result
+    return lddts, scores
 
 def run_batch(query, names, params):
     
@@ -44,22 +51,39 @@ def run_batch(query, names, params):
        
     # pad query to a power of 2
     padded_query_oh = jnp.pad(oh_d[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant') 
+    if params["use_two"]:
+        padded_query_oh2 = jnp.pad(oh_d2[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant') 
     padded_query_coordinates = jnp.pad(coord_d[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant') 
     
     # make similarity matrices
-    sim_tensor = v_sim_mtx(padded_query_oh, oh_db, blosum)
-    if params["use_two"]:
-        sim_tensor *= params["w1"]
-        sim_tensor += params["w2"]*v_sim_mtx(padded_query_oh, oh_db2, blosum2)
-    
+    if params["blurry"]:
+        sim_tensor = v_sim_mtx_blurry(padded_query_oh, oh_db, blosum)
+        sim_tensor = v_replace_jaccard_w_blosum_score(sim_tensor, params["jaccard_blosum_list"])
+    elif params["use_two"]:
+        sim_tensor1 = v_sim_mtx(padded_query_oh, oh_db, blosum)
+        sim_tensor2= v_sim_mtx(padded_query_oh2, oh_db2, blosum2)
+        sim_tensor = params["w1"]* sim_tensor1 + params["w2"]*sim_tensor2
+    else:
+        sim_tensor = v_sim_mtx(padded_query_oh, oh_db, blosum)
+
     # align (gap, open, temp)
     length_pairs = jnp.column_stack((jnp.full((len(lengths),), query_length), jnp.array(lengths)))
     aln_tensor = v_aln_w_sw(sim_tensor, length_pairs, params["gap_extend"], params["gap_open"],params["temp"])
     
-    # compute lddts (for loop for now)
+    # compute bit scores
+    # see https://www.ncbi.nlm.nih.gov/BLAST/tutorial/Altschul-1.html, eq 2
+    if params["use_two"]:
+            scores1 = vv_get_score(sim_tensor1, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+            scores2 = vv_get_score(sim_tensor2, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+            scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores1- jnp.log(params["k2"]))/jnp.log(2)
+    else:
+        scores = vv_get_score(sim_tensor, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+        scores = (params["lam"]*scores- jnp.log(params["k"]))/jnp.log(2)
+    
+    # compute lddts
     lddts = v_lddt(coord_d[query], db_coords, aln_tensor, jnp.sum((aln_tensor>0.95).astype(int), axis = [-2,-1]), query_length)
     
-    return lddts
+    return lddts, scores
 
 # Function to parse command-line arguments
 def parse_arguments():
@@ -68,8 +92,12 @@ def parse_arguments():
     # Required positional arguments
     parser.add_argument('coord_path', type=str, help="Path to the coordinate file")
     parser.add_argument('query_list_path', type=str, help="Path to the query list file")
-    parser.add_argument('blosum_path', type=str, help="Path to the BLOSUM matrix file")
-    parser.add_argument('oh_path', type=str, help="Path to the OH file")
+    parser.add_argument('blosum_path', type=str, help="Path to the BLOSUM matrix file or if blurry transition mtx file")
+    parser.add_argument('oh_path', type=str, help="Path to the OH file or if blurry NH file")
+    
+    # Values need to convert scores into bitscores 
+    parser.add_argument('--lam', type = float, default = None, help="lambda value for blosum2")
+    parser.add_argument('--k', type = float, default = None, help="k value for blosum2")
     
     # Optional arguments for the second set of paths
     parser.add_argument('--blosum2_path', type=str, help="Path to the second BLOSUM matrix file (optional)")
@@ -77,7 +105,9 @@ def parse_arguments():
     parser.add_argument('--w1', type=float, default=0.5, help="Weight for the first BLOSUM and OH files (default: 0.5)")
     parser.add_argument('--w2', type=float, default=0.5, help="Weight for the second BLOSUM and OH files (default: 0.5)")
     parser.add_argument('--batch_size', type=int, default=128, help="Batch size; lower will take more time, less memory")
-
+    parser.add_argument('--jaccard_blosum_list', type=str, default = None, help="path to list of length 100 with BLOSUM values")
+    parser.add_argument('--lam2', type = float, default = None, help="lambda value for blosum2")
+    parser.add_argument('--k2', type = float, default = None, help="k value for blosum2")
     
     # Optional arguments with default values for gap penalties and output location
     parser.add_argument('--gap_open', type=float, default=-10, help="Gap opening penalty (default: -10)")
@@ -123,7 +153,19 @@ if __name__ == "__main__":
     params["temp"] = .01
     params["w1"]=args.w1
     params["w2"]=args.w2
+    params["lam"]= args.lam
+    params["k"]=args.k
+    params["lam2"]=args.lam2
+    params["k2"]=args.k2
     params["use_two"] = bool(args.blosum2_path)
+    params["blurry"] = bool(args.jaccard_blosum_list)
+    
+    #check the length of jaccard blosum list; needs to be 100 now
+    if params["blurry"]:
+        params["jaccard_blosum_list"] = np.load(args.jaccard_blosum_list)
+        if params["jaccard_blosum_list"].shape[0]!= 100:
+            raise ValueError("jaccard BLOSUM list must have length 100")
+     
     
     # get longest query_length
     max_query_length = max([oh_d[query].shape[0] for query in query_list])
@@ -136,26 +178,30 @@ if __name__ == "__main__":
     sorted_names = [key for key, shape in sorted_keys]
 
     
-    # Store results
+    # Store results: make one output file for the entire query list
     if not os.path.exists(args.out_location):
         os.makedirs(args.out_location)
+    filename = f"{os.path.basename(args.query_list_path)}.output"
     
     # Run one by all and write output results
     for query in query_list:
         # Compute one by all LDDTs
         print(query)
-        lddts = run_in_batches(query, sorted_names,args.batch_size, params)
+        #half the batch size if the query is longer than 512
+        bs = args.batch_size
+        if max_query_length >512:
+            bs = int(bs/2)
+        lddts, scores = run_in_batches(query, sorted_names,bs, params)
 
-        # Sort by LDDT
-        name_lddt_pairs = [(sorted_names[i], lddts[i]) for i in range(len(lddts))]
-        sorted_pairs = sorted(name_lddt_pairs, key=lambda x: x[1], reverse = True)
-        
-
-        # Make output file for the query
-        filename = f"{query}.txt"
-        with open(f"{args.out_location}/{filename}", "w") as file:
-            for pair in sorted_pairs:
-                file.write(f"{query} {pair[0]} {pair[1]}\n")
+        prods = [lddts[i]*scores[i] for i in range(len(lddts))]
+                                                                 
+        # Sort by geo mean
+        name_triples = [(sorted_names[i], prods[i], lddts[i],scores[i]) for i in range(len(prods))]
+        sorted_quads = sorted(name_triples, key=lambda x: x[1], reverse = True)
+    
+        with open(f"{args.out_location}/{filename}", "a") as file:
+            for quad in sorted_quads:
+                file.write(f"{query} {quad[0]} {quad[1]} {quad[2]} {quad[3]}\n")
  
     
 

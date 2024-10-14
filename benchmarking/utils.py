@@ -215,6 +215,47 @@ def replace_jaccard_w_blosum_score(matrix, replacement_list):
 
 v_replace_jaccard_w_blosum_score = jax.jit(jax.vmap(replace_jaccard_w_blosum_score, in_axes=(0, None)))
 
+
+
+def get_score(sim_mtx, aln, length_pair, ge, go):
+    
+    l1,l2 = length_pair
+    mask = (jnp.arange(aln.shape[0]) < l1)[:,None] * (jnp.arange(aln.shape[1]) < l2)[None,:]
+    nonzero = jnp.sum(aln)>0
+    
+    # score from match positions
+    ms = jnp.sum(sim_mtx*aln*mask)
+    
+    # gaps before or after the last aligned position don't count because local alignment
+    # computes sum of the lengths of the first and second sequences between first and last aligned position
+    # have to fill fake positions differently for min and max and if there are no aligned positions
+    row_for_max, col_for_max = jnp.where(aln==1, size = aln.shape[0], fill_value = -1*nonzero )
+    row_for_min, col_for_min = jnp.where(aln==1, size = aln.shape[0], fill_value = (l1+l2)*nonzero) 
+    al1 = jnp.max(row_for_max)-jnp.min(row_for_min) + 1
+    al2 = jnp.max(col_for_max)-jnp.min(col_for_min) + 1
+    # total number of gaps
+    num_unaligned_pos = al1 + al2 - 2*jnp.sum(aln*mask)
+    
+    # total number of gap open
+    # pos is start of new segment if (A[i,j] = 1 and A[i-1,j-1] = 0) or A[0,0]
+    num_segments = aln.at[0,0].get() + jnp.sum((aln[1:,1:]-aln[:-1,:-1])==1)
+    
+    # open score
+    os = go*(num_segments-1)*nonzero
+    
+    # extend score
+    gs = (num_unaligned_pos - (num_segments-1))*ge*nonzero
+    
+        
+    # due to the smooth smith waterman and rounding, score can occasionally be negative
+    # so we force it to be zero
+    score = ms + os + gs
+    return score*(score>0)
+
+vv_get_score = jax.jit(jax.vmap(get_score  , in_axes= (0, 0, 0,None,None)))
+
+
+
 ########## FUNCTIONS TO CHECK KEY AND SEQUENCE LENGTH COMPATIBILITY ################
 
 # returns protein_name: length based on some input dictionary with values of shape Lx *
