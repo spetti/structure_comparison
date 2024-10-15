@@ -38,7 +38,7 @@ def run_in_batches(query, long_list, batch_size, params):
     return lddts, scores
 
 def run_batch(query, names, params):
-    
+
     # one hot encode database(s), pad to a common length that is a power of 2    
     oh_db, lengths = pad_and_stack([oh_d[name] for name in names])
     if params["use_two"]:
@@ -69,6 +69,8 @@ def run_batch(query, names, params):
     # align (gap, open, temp)
     length_pairs = jnp.column_stack((jnp.full((len(lengths),), query_length), jnp.array(lengths)))
     aln_tensor = v_aln_w_sw(sim_tensor, length_pairs, params["gap_extend"], params["gap_open"],params["temp"])
+    aln_tensor = (aln_tensor>params["soft_aln_thresh"]).astype(int)
+
     
     # compute bit scores
     # see https://www.ncbi.nlm.nih.gov/BLAST/tutorial/Altschul-1.html, eq 2
@@ -150,7 +152,8 @@ if __name__ == "__main__":
     params={}
     params["gap_open"] = args.gap_open
     params["gap_extend"] = args.gap_extend
-    params["temp"] = .01
+    params["temp"] = 1e-3 # do not change
+    params["soft_aln_thresh"] = 0.5 # do not change
     params["w1"]=args.w1
     params["w2"]=args.w2
     params["lam"]= args.lam
@@ -162,7 +165,7 @@ if __name__ == "__main__":
     
     #check the length of jaccard blosum list; needs to be 100 now
     if params["blurry"]:
-        params["jaccard_blosum_list"] = np.load(args.jaccard_blosum_list)
+        params["jaccard_blosum_list"] = np.load(args.jaccard_blosum_list)+0.0
         if params["jaccard_blosum_list"].shape[0]!= 100:
             raise ValueError("jaccard BLOSUM list must have length 100")
      

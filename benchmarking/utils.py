@@ -216,13 +216,12 @@ def replace_jaccard_w_blosum_score(matrix, replacement_list):
 v_replace_jaccard_w_blosum_score = jax.jit(jax.vmap(replace_jaccard_w_blosum_score, in_axes=(0, None)))
 
 
-
+# needs aln to be a binary matrix and a valid alignment for this to give meaningful results!!!
 def get_score(sim_mtx, aln, length_pair, ge, go):
     
     l1,l2 = length_pair
     mask = (jnp.arange(aln.shape[0]) < l1)[:,None] * (jnp.arange(aln.shape[1]) < l2)[None,:]
     nonzero = jnp.sum(aln)>0
-    
     # score from match positions
     ms = jnp.sum(sim_mtx*aln*mask)
     
@@ -234,6 +233,7 @@ def get_score(sim_mtx, aln, length_pair, ge, go):
     al1 = jnp.max(row_for_max)-jnp.min(row_for_min) + 1
     al2 = jnp.max(col_for_max)-jnp.min(col_for_min) + 1
     # total number of gaps
+    #print(al1,al2,jnp.sum(aln*mask))
     num_unaligned_pos = al1 + al2 - 2*jnp.sum(aln*mask)
     
     # total number of gap open
@@ -249,6 +249,7 @@ def get_score(sim_mtx, aln, length_pair, ge, go):
         
     # due to the smooth smith waterman and rounding, score can occasionally be negative
     # so we force it to be zero
+    #print(ms,os,gs)
     score = ms + os + gs
     return score*(score>0)
 
