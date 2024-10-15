@@ -2,8 +2,13 @@ Summary: nenchmarking of methods
 
 Description of code:
 
-- utils.py: contains vectorized functions for computing a similarity matrix, an alignment, and LDDT
+- utils.py: contains vectorized functions for computing a similarity matrix, an alignment, bitscores, and LDDT
 
+Alignment benchmark for grid search
+
+- alignment_benchmark.ipynb
+
+Search benchmark
 - query_list_by_all.py: search a list of queries against a database
 
     python query_list_by_all.py <npz db calpha coordinate tensor> <csv of list of queries> <npy of BLOSUM matrix> <npz of db of sequences one-hot encoded> 
@@ -22,28 +27,12 @@ Description of code:
     python query_list_by_all.py ./data/allCACoord.npz ./data/short_test_query_list.csv ./data/nH_mat.npy ./data/nH_oh.npz --blosum2_path ./data/nH_mat.npy --oh2_path ./data/nH_oh.npz --w1 1.0 --w2 1.0 --gap_open -10 --gap_extend -2 --out_location test_results_3Di_3Dn
 
     The similarity matrix used for alignment is w1(sim matrix from first BLOSUM) + w2(sim matrix from second BLOSUM)
-
-    (OLD)
-    # The data folder
-    - Put BLOSUM and databases of one-hot sequences here
-    - test_queries_by_10: directory containing all names in test.csv. Names were sorted by length of the corresponding sequence, then split into csv, each with length 10
-    - short_test_queries_by_10: directory containing 10 of the files from the above directory. Use this when debugging snakemake. That way snakemake will launch 10 jobs instead of approx 470 
-    - make_query_lists.ipynb: if you use the query lists in test_queries_by_10, you will launch many approximately 10 min jobs. If you prefer fewer longer jobs, use this notebook to make test_queries_by_n; the advantage is that the first protein is slowest, so you will get overall shorter time if you do fewer longer jobs, but it will be harder parallize 
-    - short_test_query_list.csv: a list of 5 test queries (start by checking this runs with the above query_list_by_all.py commands)
-
-
-- alignment_benchmark.ipynb: in progress, will do a benchmark and grid search based on the lddt of validation pairs
-
-Inputs/Outputs:
-
-- For query_list_by_all.np:
-
-    Inputs:
-    - BLOSUM and databases of one-hot sequences
-    Outputs:
-    - TBD
-
-- For alignment_benchmark.ipynb:
-    Inputs:
     
+- Snakemake: Calls query_list_by_all
+
+- execute.sh: runs snakemake
+
+
+
+
 
