@@ -2,7 +2,6 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import csv
-from matplotlib import pyplot as plt
 import sys
 import os
 

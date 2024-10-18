@@ -1,0 +1,36 @@
+import os
+
+# to unlock
+# snakemake -s Snakefile_compute_BLOSUM_ect --config input_dir=/cluster/tufts/pettilab/shared/structure_comparison_data/alphabets_blosum_coordinates/VQVAEs_small --unlock --cores all
+
+# Directory containing the input files
+INPUT_DIR = config["input_dir"]
+#INPUT_DIR = "/cluster/tufts/pettilab/shared/structure_comparison_data/alphabets_blosum_coordinates/VQVAEs"
+
+# Get all input files of the form name.npz
+input_files = [f"{INPUT_DIR}/{os.path.splitext(f)[0]}" for f in os.listdir(INPUT_DIR) if f.endswith(".npz")]
+print(input_files)
+# Rule to run the compute_BLOSUM_gaps_lam_k.py script on each input file
+
+rule all:
+    input:
+        expand("{input_file}_blosum.npy", input_file=input_files),
+        expand("{input_file}_params.pkl", input_file=input_files),
+        expand("{input_file}_lddt_grid.pkl", input_file=input_files)
+
+rule compute_blosum:
+    input:
+        npz_file="{input_file}.npz"
+    output:
+        blosum_npy="{input_file}_blosum.npy",
+        params_pkl="{input_file}_params.pkl",
+        lddt_grid_pkl="{input_file}_lddt_grid.pkl"
+    resources:
+        mem_mb=64000,  # X000 Request X GB of memory
+        cpus = 16,
+        time="7:00:00",
+        gpus = 1
+    shell:
+        """
+        python compute_BLOSUM_gaps_lam_k.py {input.npz_file}
+        """
