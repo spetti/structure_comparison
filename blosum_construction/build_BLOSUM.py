@@ -64,15 +64,15 @@ def get_pairs_and_alns(oh_path, pairs_path):
 
 def compute_pairwise_counts(oh1, oh2, aln_list):
     
-    aln_pos1 = jnp.where(aln_list > -.0001, size = oh1.shape[0], fill_value =-1)[0]
-    aln_pos2 = aln_list.at[aln_pos1].get(mode = "drop")
+    aln_pos1 = jnp.where(aln_list > -.0001, size = oh1.shape[0], fill_value =oh1.shape[0]+oh2.shape[0]+1)[0]
+    aln_pos2 = aln_list.at[aln_pos1].get(mode = "drop", fill_value =oh1.shape[0]+oh2.shape[0]+1)
 
     # reduce to matched positions
     reduced_oh1 = jnp.zeros_like(oh1)
-    reduced_oh1 = reduced_oh1.at[:oh1.shape[0]].set(jnp.take(oh1, aln_pos1, axis=0), mode = "drop")
+    reduced_oh1 = reduced_oh1.at[:oh1.shape[0]].set(jnp.take(oh1, aln_pos1, axis=0, mode = "fill", fill_value = 0), mode = "drop")
     reduced_oh2 = jnp.zeros_like(oh2)
-    reduced_oh2 = reduced_oh2.at[:oh2.shape[0]].set(jnp.take(oh2, aln_pos2, axis=0), mode = "drop")
-
+    reduced_oh2 = reduced_oh2.at[:oh2.shape[0]].set(jnp.take(oh2, aln_pos2, axis=0, mode = "fill", fill_value = 0), mode = "drop")
+   
     # compute counts
     return jnp.einsum('mi,mj->ij', reduced_oh1, reduced_oh2)
 
@@ -113,25 +113,25 @@ def counts_to_blosum(counts):
     return b
 
 
-def run_in_batches(long_list,oh_d,  alns_as_lists,n2l_d, batch_size):
+def run_in_batches(long_list,oh_d,  alns_as_lists,n2l_d, batch_size, verbose = True):
     result = None
     for i in range(0, len(long_list), batch_size):
         batch = long_list[i:i + batch_size]  # Get the current batch
-        counts = jnp.sum(run_batch(batch,oh_d,  alns_as_lists, n2l_d), axis = 0)
+        counts = jnp.sum(run_batch(batch,oh_d,  alns_as_lists, n2l_d, verbose), axis = 0)
         if i == 0:
             result = counts
         else:
             result+= counts   # Process and extend results
-        print(f"finished batch {i}")
+        if verbose: print(f"finished batch {i}")
     return result
 
-def run_batch(pairs, oh_d, alns_as_lists, n2l_d):
+def run_batch(pairs, oh_d, alns_as_lists, n2l_d, verbose = True):
 
     # compute max length of any protein
     names=[item for tup in pairs for item in tup]
     max_len = max([n2l_d[name] for name in names])
     pad_to = int(jnp.where(max_len < 1, 1, 2 ** jnp.ceil(jnp.log2(max_len))))
-    print(pad_to)    
+    if verbose: print(pad_to)    
     
     alns = []
     for pair in pairs:
@@ -158,6 +158,13 @@ def compute_blosum(oh_path, pairs_path, batch_size = 5000, save_path = None):
     
     return blosum
     
+    
+def compute_counts(oh_path, pairs_path, batch_size = 5000, save_path = None):
+    
+    jax.config.update("jax_enable_x64", True)
+    pairs,oh_d, alns_as_lists, n2l_d = get_pairs_and_alns(oh_path, pairs_path)
+    counts = run_in_batches(pairs, oh_d, alns_as_lists, n2l_d, batch_size)
+    return counts
     
 # RUN IT
 if __name__ == "__main__":
