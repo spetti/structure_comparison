@@ -14,7 +14,7 @@ from utils import *
 
 # example usage
 # export data=/cluster/tufts/pettilab/shared/structure_comparison_data
-# python gap_search_via_aln_benchmark.py $data/alphabets_blosum_coordinates/MSE/MSE.npz $data/alphabets_blosum_coordinates/MSE/MSE.npy $data/alphabets_blosum_coordinates/allCACoord.npz $data/train_test_val/pairs_validation.csv $data/train_test_val/pairs_validation_lddts.csv test_lddt_d
+# python gap_search_via_aln_benchmark.py $data/alphabets/aa.npz $data/alphabets/aa_blosum.npy $data/protein_data/allCACoord.npz $data/protein_data/given_validation_alignments.npz $data/protein_data/pairs_validation_lddts.csv test_lddt_d.pkl
 
 def parse_arguments():
     if len(sys.argv) != 7:
@@ -32,7 +32,7 @@ def parse_arguments():
 
 
 # check dimensions and organize data
-def get_data(oh_path, blosum_path, coord_path, val_path, lddts_given_path):
+def get_data(oh_path, blosum_path, coord_path, val_aln_path, given_lddt_path):
     
     coord_d = np.load(coord_path)
     oh_d = np.load(oh_path)
@@ -44,48 +44,42 @@ def get_data(oh_path, blosum_path, coord_path, val_path, lddts_given_path):
     
     # make sure coordinates and one hots have the same length and same seqs are represented
     bad_list = check_keys_and_lengths(oh_d, coord_d)
-    # remove any pairs with length > 512 
     bad_list.append('d1e25a_')
-    pairs = []
-    #alns_as_lists = []
-    first = True
-    #tm_d = {}
-    n2l_d = make_name_to_length_d(oh_d)
-    with open(val_path, mode='r') as file:
-        csv_reader = csv.reader(file)
-        for row in csv_reader:
-            pair = (row[1],row[2])
-            if first:
-                first = False
-                continue    
-            elif pair[0] in bad_list or pair[1] in bad_list:
-                continue
-            elif n2l_d[pair[0]]>512 or n2l_d[pair[1]]>512:
-                continue
-            else:
-                pairs.append(pair)
-                #tm_d[pair]= float(row[3])
-                #alns_as_lists.append([int(i) for i in row[-1].strip('[]').split()])
-        
+    
+    n2l_d = make_name_to_length_d(coord_d)
+
+    # load in validation pairs, their alignments and lddt of them (precomputed in organize_val_and_train)
+    val_aln_d = dict(np.load(val_aln_path))
+    val_aln_d_new = {}
+    for key, val in val_aln_d.items():
+        val_aln_d_new[tuple(key.split(','))] = val
+
+    val_aln_d = val_aln_d_new
+    val_aln_d_new = {}
     given_lddt_d = {}
 
     # Open the CSV file for reading
-    with open(lddts_given_path, mode='r') as file:
+    with open(given_lddt_path, mode='r') as file:
         reader = csv.reader(file)
         for row in reader:
             a, b, value = row[0], row[1], float(row[2])  # Convert value to float
             given_lddt_d[(a, b)] = value
     
+    # check that keys match
+    check_keys(given_lddt_d, val_aln_d)
     
+    # check that no pair includes a protein on the bad list
+    for key in val_aln_d.keys():
+        if key[0] in bad_list or key[1] in bad_list:
+            raise ValueError(f"pair {key} is bad and should not be used")
+            
     # sort pairs by length of longer protein
-    pair_max_length_pairs = [(pair, max(n2l_d[pair[0]], n2l_d[pair[1]])) for pair in pairs]
-    sorted_keys = sorted(pair_max_length_pairs, key=lambda x: x[1])
+    pair_list = sorted(list(val_aln_d.keys())) 
+    pair_max_length_pairs = [(pair, max(n2l_d[pair[0]], n2l_d[pair[1]])) for pair in pair_list]
+    sorted_keys = sorted(pair_max_length_pairs, key=lambda x: (x[1],x[0][0],x[0][1]))
     sorted_pairs = [key for key, shape in sorted_keys]
     pairs = sorted_pairs
-
-    # get lists of given lddt and tm score in the order that we will get our results
-    given_lddt_list = [given_lddt_d[p] for p in pairs]
-    #tm_list = [tm_d[p] for p in pairs]
+    given_lddt_list = [given_lddt_d[pair] for pair in pairs]
         
     data = {}
     data["oh_d"]= oh_d
@@ -147,7 +141,7 @@ def run_batch(pairs, params, data):
             sim_tensor += params["w2"]*vv_sim_mtx(lefts2, rights2, blosum2)
 
     # align (gap, open, temp)
-    length_pairs = jnp.column_stack([left_lengths, right_lengths])
+    length_pairs = jnp.column_stack([jnp.array(left_lengths), jnp.array(right_lengths)])
     aln_tensor = v_aln_w_sw(sim_tensor, length_pairs, params["gap_extend"], params["gap_open"], params["temp"])
     aln_tensor = (aln_tensor>params["soft_aln_thresh"]).astype(int)
 
@@ -179,29 +173,21 @@ def grid_search(data,open_choices=np.arange(-20,0,2), extend_choices=np.arange(-
             params["gap_extend"] = e
             params["gap_open"] = o
             lddt_d[(o,e)] = run_in_batches( params, data)
-    best_pair = get_max_key_by_spearman(lddt_d, data["given_lddt_list"])
-    sp = ss.spearmanr(lddt_d[best_pair], data["given_lddt_list"]).correlation
-    mlddt = np.mean(lddt_d[best_pair])
-    
-    print(f"best pair by spearman: {best_pair}")
-    print(f"spearman of best_pair: {sp}")
-    print(f"mean lddt of best_pair: {mlddt}")
-    
+ 
+    for key, val in lddt_d.items():
+        lddt_d[key]= [_.item() for _ in val]
+        
     if save_path:
         pickle.dump(lddt_d, open(save_path, "wb"))
     
-    return lddt_d, (best_pair, sp, mlddt)
-
-
-def get_max_key_by_spearman(your_dict,given_lddt_list):
-    return max(your_dict, key=lambda key: ss.spearmanr(your_dict[key], given_lddt_list).correlation)
+    return lddt_d
 
 
 def run_grid_search(oh_path, blosum_path, coord_path, val_path, lddts_given_path, save_path=None):
     
     data = get_data(oh_path, blosum_path, coord_path, val_path, lddts_given_path)
-    lddt_d, best_triple = grid_search(data, save_path =save_path)
-    return lddt_d, best_triple
+    lddt_d = grid_search(data, save_path =save_path)
+    return lddt_d
 
 
 if __name__ == "__main__":

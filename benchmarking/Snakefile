@@ -6,7 +6,7 @@ import os
 # Use the config file to define relevant variables
 
 def parse_variables(file_path):
-    keys = ["data_path", "coord_d","query_list_dir", "oh_d1", "oh_d2", "blosum1", "blosum2","gap_open", "gap_extend", "w1", "w2","use_two","jaccard_blosum_list","blurry","lam", "lam2","k","k2"]
+    keys = ["data_path", "coord_d","query_list_dir", "oh_d1", "oh_d2", "blosum1", "blosum2","gap_open", "gap_extend", "w1", "w2","use_two","jaccard_blosum_list","blurry","lam", "lam2","k","k2","refs"]
     variables = {key: None for key in keys}
     
     # Open the file and read its contents
@@ -19,7 +19,7 @@ def parse_variables(file_path):
                 value = parts[1].strip()  # Value part
                 if value == '': continue
                 # Store values in the dictionary based on their type
-                if key in ["data_path", "coord_d","query_list_dir", "oh_d1", "oh_d2", "blosum1", "blosum2", "jaccard_blosum_list"]:
+                if key in ["data_path", "coord_d","query_list_dir", "oh_d1", "oh_d2", "blosum1", "blosum2", "jaccard_blosum_list","refs"]:
                     variables[key] = value  #
                 elif key in ["gap_open", "gap_extend", "w1", "w2", "lam", "lam2","k","k2"]:
                     variables[key] = float(value)  
@@ -44,7 +44,7 @@ os.makedirs(results_dir, exist_ok=True)
 
 # Get all CSV files in the query_list_dir
 query_lists = sorted(glob.glob(os.path.join(query_list_dir, "query_list_*.csv")))
-
+print(query_lists)
 
 # Define the main rule that specifies all expected output files
 rule all:
@@ -57,6 +57,7 @@ if variables["use_two"]:
     rule process_query_list_combo:
         input:
             allca=f"{variables['data_path']}/{variables['coord_d']}",              
+            refs=f"{variables['data_path']}/{variables['refs']}",              
             query=lambda wildcards: os.path.join(query_list_dir, f"{wildcards.query}"),  
             mat1=f"{variables['data_path']}/{variables['blosum1']}",              
             oh1=f"{variables['data_path']}/{variables['oh_d1']}",
@@ -65,8 +66,8 @@ if variables["use_two"]:
         output:
             os.path.join(results_dir, "{query}.output")
         resources:
-            mem_mb=40000,  # X000 Request X GB of memory
-            cpus = 15,
+            mem_mb=80000,  # X000 Request X GB of memory
+            cpus = 30,
             time="3:00:00"
         params:
             script="query_list_by_all.py",  # Path to your Python script
@@ -80,7 +81,7 @@ if variables["use_two"]:
             k2=variables['k2']
         shell:
             """
-            python {params.script} {input.allca} {input.query} {input.mat1} {input.oh1} \
+            python {params.script} {input.allca} {input.query} {input.refs} {input.mat1} {input.oh1} \
             --blosum2_path {input.mat2} --oh2_path {input.oh2} \
             --w1 {params.w1} --w2 {params.w2} \
             --gap_open {params.gap_open} --gap_extend {params.gap_extend} \
@@ -92,6 +93,7 @@ elif variables["blurry"]:
         input:
             allca=f"{variables['data_path']}/{variables['coord_d']}",              
             query=lambda wildcards: os.path.join(query_list_dir, f"{wildcards.query}"),  
+            refs=f"{variables['data_path']}/{variables['refs']}",              
             mat1=f"{variables['data_path']}/{variables['blosum1']}",              
             oh1=f"{variables['data_path']}/{variables['oh_d1']}",
             bjl=f"{variables['data_path']}/{variables['jaccard_blosum_list']}",              
@@ -109,7 +111,7 @@ elif variables["blurry"]:
             k=variables['k'],
         shell:
             """
-            python {params.script} {input.allca} {input.query} {input.mat1} {input.oh1} \
+            python {params.script} {input.allca} {input.query} {input.refs} {input.mat1} {input.oh1} \
             --jaccard_blosum_list {input.bjl} --batch_size 64 \
             --gap_open {params.gap_open} --gap_extend {params.gap_extend} \
             --lam {params.lam} --k {params.k} \
@@ -120,14 +122,15 @@ else:
     rule process_query_list_single:
         input:
             allca=f"{variables['data_path']}/{variables['coord_d']}",              
-            query=lambda wildcards: os.path.join(query_list_dir, f"{wildcards.query}"),  
+            query=lambda wildcards: os.path.join(query_list_dir, f"{wildcards.query}"), 
+            refs=f"{variables['data_path']}/{variables['refs']}",              
             mat1=f"{variables['data_path']}/{variables['blosum1']}",              
             oh1=f"{variables['data_path']}/{variables['oh_d1']}"  
         output:
             os.path.join(results_dir, "{query}.output")
         resources:
-            mem_mb= 40000,  # X000 Request X GB of memorycat
-            cpus = 15,
+            mem_mb= 80000,  # X000 Request X GB of memorycat
+            cpus = 30,
             time="3:00:00"
         params:
             script="query_list_by_all.py",  # Path to your Python script
@@ -137,7 +140,7 @@ else:
             k=variables['k'],
         shell:
             """
-            python {params.script} {input.allca} {input.query} {input.mat1} {input.oh1} \
+            python {params.script} {input.allca} {input.query} {input.refs} {input.mat1} {input.oh1} \
             --gap_open {params.gap_open} --gap_extend {params.gap_extend} \
             --lam {params.lam} --k {params.k} \
             --out_location {results_dir}

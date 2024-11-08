@@ -297,4 +297,26 @@ def check_keys_and_lengths(hot_d, coord_d):
     bad_list = check_keys(hot_d, coord_d)
     bad_list+=check_lengths(make_name_to_length_d(hot_d),make_name_to_length_d(coord_d))
     return bad_list
+
+
+def sim_mtx_blurry_from_blurry(nhot_1, nhot_2):
+    
+    #compute blurry vectors 
+    A = nhot_1
+    B = nhot_2
+
+    # Expand A and B to 3D arrays for broadcasting, aligning them for element-wise minimum calculation
+    A_expanded = A[:, jnp.newaxis, :]  # Shape becomes (A_rows, 1, A_columns)
+    B_expanded = B[jnp.newaxis, :, :]  # Shape becomes (1, B_columns, B_rows)
+    
+    # Calculate the minimum for each pair of elements from A and B
+    min_elements = jnp.minimum(A_expanded, B_expanded)
+    max_elements = jnp.maximum(A_expanded,B_expanded)
+    
+    # Sum over the last dimension to get the final result
+    result = jnp.sum(min_elements, axis=2)/jnp.where(jnp.sum(max_elements, axis=2)==0, -1,jnp.sum(max_elements, axis=2)) # Shape is rows_A, rows_B, 1001
+    return result
+    
+jit_sim_mtx_blurry_from_blurry = jax.jit(sim_mtx_blurry_from_blurry)
+v_sim_mtx_blurry_from_blurry = jax.jit(jax.vmap(sim_mtx_blurry_from_blurry, in_axes = (0,None)))
               

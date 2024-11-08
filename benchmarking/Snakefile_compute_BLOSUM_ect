@@ -14,16 +14,12 @@ print(input_files)
 
 rule all:
     input:
-        expand("{input_file}_blosum.npy", input_file=input_files),
-        expand("{input_file}_params.pkl", input_file=input_files),
         expand("{input_file}_lddt_grid.pkl", input_file=input_files)
 
 rule compute_blosum:
     input:
         npz_file="{input_file}.npz"
     output:
-        blosum_npy="{input_file}_blosum.npy",
-        params_pkl="{input_file}_params.pkl",
         lddt_grid_pkl="{input_file}_lddt_grid.pkl"
     resources:
         mem_mb=64000,  # X000 Request X GB of memory

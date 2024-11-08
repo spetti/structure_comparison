@@ -22,6 +22,36 @@ def parse_arguments():
     return oh_path, train_path,save_path
 
 
+
+def counts_to_MI(counts):
+    counts = counts + 1  # Ensure no zeros
+    single_counts = jnp.sum(counts, axis=0) + jnp.sum(counts, axis=1)
+    total_pairs = jnp.sum(counts)
+
+    # Create indices for matrix operations
+    i, j = jnp.indices(counts.shape)
+
+    # Compute cij
+    cij = jnp.where(i == j, counts[i, j], counts[i, j] + counts[j, i])
+
+    # Calculate MI values
+    b = (cij / total_pairs) * (1 / jnp.log(2)) * (
+        jnp.log(4 * cij * total_pairs) - jnp.log((1 + (i != j)) * single_counts[i] * single_counts[j])
+    )
+
+    return jnp.sum(b)
+
+jit_counts_to_MI = jax.jit(counts_to_MI)
+
+def counts_to_entropy(counts):
+    counts = counts + 1  # Ensure no zeros
+    single_counts = jnp.sum(counts, axis=0) + jnp.sum(counts, axis=1)
+    probs = single_counts/jnp.sum(single_counts)
+    return jnp.sum(probs*jnp.log(probs))
+
+jit_counts_to_entropy = jax.jit(counts_to_entropy)
+
+
 def get_pairs_and_alns(oh_path, pairs_path):
     oh_d = np.load(oh_path)
 
@@ -122,7 +152,7 @@ def run_in_batches(long_list,oh_d,  alns_as_lists,n2l_d, batch_size, verbose = T
             result = counts
         else:
             result+= counts   # Process and extend results
-        if verbose: print(f"finished batch {i}")
+        if verbose: print(f"finished batch, {i} done")
     return result
 
 def run_batch(pairs, oh_d, alns_as_lists, n2l_d, verbose = True):

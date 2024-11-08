@@ -15,7 +15,7 @@ from utils import *
 
 #export data=/cluster/tufts/pettilab/shared/structure_comparison_data
 
-# python query_list_by_all.py $data/alphabets_blosum_coordinates/allCACoord.npz $data/small_test_queries_by_10/query_list_1.csv  $data/alphabets_blosum_coordinates/MSE/MSE.npy $data/alphabets_blosum_coordinates/MSE/MSE.npz --out_location test_results --lam 0.318 --k 0.269 
+# python query_list_by_all.py $data/protein_data/allCACoord.npz $data/protein_data/validation_queries_by_10/query_list_1.csv  $data/protein_data/ref_names_no_test.csv $data/alphabets/3Di_blosum.npy $data/alphabets/3Di.npz --out_location test_results --lam 0.318 --k 0.269 --gap_open -10 --gap_extend -1
 
 #0.3178780674934387 0.2689192327152678
 
@@ -94,6 +94,7 @@ def parse_arguments():
     # Required positional arguments
     parser.add_argument('coord_path', type=str, help="Path to the coordinate file")
     parser.add_argument('query_list_path', type=str, help="Path to the query list file")
+    parser.add_argument('ref_names_path', type=str, help="Path to the reference list file")
     parser.add_argument('blosum_path', type=str, help="Path to the BLOSUM matrix file or if blurry transition mtx file")
     parser.add_argument('oh_path', type=str, help="Path to the OH file or if blurry NH file")
     
@@ -140,6 +141,7 @@ if __name__ == "__main__":
     oh_d = np.load(args.oh_path)
     blosum = np.load(args.blosum_path).astype(float)
     query_list = load_csv_to_list(args.query_list_path)
+    ref_names = load_csv_to_list(args.ref_names_path)
     if oh_d[list(oh_d.keys())[0]].shape[1]!=blosum.shape[1]:
         raise ValueError(f"one-hot encoding length does not match blosum shape {blosum.shape[1]}")
     if args.blosum2_path and args.oh2_path:
@@ -175,8 +177,8 @@ if __name__ == "__main__":
     params["query_pad_to"] = int(max_query_length)
     print(f"padding queries to {max_query_length}")
     
-    # Sort the database by length for better batching
-    key_shape_pairs = [(key, oh_d[key].shape[0]) for key in oh_d.keys()]
+    # Sort the database by length for better batching; these names will be read in now
+    key_shape_pairs = [(key, oh_d[key].shape[0]) for key in ref_names]
     sorted_keys = sorted(key_shape_pairs, key=lambda x: x[1])
     sorted_names = [key for key, shape in sorted_keys]
 
@@ -200,7 +202,7 @@ if __name__ == "__main__":
                                                                  
         # Sort by geo mean
         name_triples = [(sorted_names[i], prods[i], lddts[i],scores[i]) for i in range(len(prods))]
-        sorted_quads = sorted(name_triples, key=lambda x: x[1], reverse = True)
+        sorted_quads = sorted(name_triples, key=lambda x: x[2], reverse = True)
     
         with open(f"{args.out_location}/{filename}", "a") as file:
             for quad in sorted_quads:
