@@ -100,9 +100,9 @@ elif variables["blurry"]:
         output:
             os.path.join(results_dir, "{query}.output")
         resources:
-            mem_mb=120000,  # X000 Request X GB of memory
-            cpus = 40,
-            time="24:00:00"
+            mem_mb=160000,  # X000 Request X GB of memory
+            cpus = 60,    #originallly run with 16/60; gettting the last few 24/90
+            time="5:00:00"
         params:
             script="query_list_by_all.py",  # Path to your Python script
             gap_open= variables["gap_open"],   # Gap opening penalty
@@ -130,7 +130,7 @@ else:
             os.path.join(results_dir, "{query}.output")
         resources:
             mem_mb= 80000,  # X000 Request X GB of memorycat
-            cpus = 30,
+            cpus = 30,     
             time="3:00:00"
         params:
             script="query_list_by_all.py",  # Path to your Python script
