@@ -41,8 +41,10 @@ def run_batch(query, names, params):
 
     # one hot encode database(s), pad to a common length that is a power of 2    
     oh_db, lengths = pad_and_stack([oh_d[name] for name in names])
-    if params["use_two"]:
+    if params["use_two"] or params["use_three"]:
         oh_db2, _ = pad_and_stack([oh_d2[name] for name in names])
+    if params["use_three"]:
+        oh_db3, _ = pad_and_stack([oh_d3[name] for name in names])
     
     query_length = oh_d[query].shape[0]
  
@@ -51,8 +53,10 @@ def run_batch(query, names, params):
        
     # pad query to a power of 2
     padded_query_oh = jnp.pad(oh_d[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant') 
-    if params["use_two"]:
+    if params["use_two"] or params["use_three"]:
         padded_query_oh2 = jnp.pad(oh_d2[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant') 
+    if params["use_three"]:
+        padded_query_oh3 = jnp.pad(oh_d3[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant')
     padded_query_coordinates = jnp.pad(coord_d[query], ((0, params["query_pad_to"] - query_length),(0,0)), mode='constant') 
     
     # make similarity matrices
@@ -63,6 +67,11 @@ def run_batch(query, names, params):
         sim_tensor1 = v_sim_mtx(padded_query_oh, oh_db, blosum)
         sim_tensor2= v_sim_mtx(padded_query_oh2, oh_db2, blosum2)
         sim_tensor = params["w1"]* sim_tensor1 + params["w2"]*sim_tensor2
+    elif params["use_three"]:
+        sim_tensor1 = v_sim_mtx(padded_query_oh, oh_db, blosum)
+        sim_tensor2= v_sim_mtx(padded_query_oh2, oh_db2, blosum2)
+        sim_tensor3= v_sim_mtx(padded_query_oh3, oh_db3, blosum3)
+        sim_tensor = params["w1"]* sim_tensor1 + params["w2"]*sim_tensor2 + params["w3"]*sim_tensor3
     else:
         sim_tensor = v_sim_mtx(padded_query_oh, oh_db, blosum)
 
@@ -75,9 +84,16 @@ def run_batch(query, names, params):
     # compute bit scores
     # see https://www.ncbi.nlm.nih.gov/BLAST/tutorial/Altschul-1.html, eq 2
     if params["use_two"]:
-            scores1 = vv_get_score(sim_tensor1, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
-            scores2 = vv_get_score(sim_tensor2, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
-            scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores1- jnp.log(params["k2"]))/jnp.log(2)
+        scores1 = vv_get_score(sim_tensor1, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+        scores2 = vv_get_score(sim_tensor2, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+        scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores1- jnp.log(params["k2"]))/jnp.log(2)
+            
+    if params["use_three"]:
+        scores1 = vv_get_score(sim_tensor1, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+        scores2 = vv_get_score(sim_tensor2, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+        scores3 = vv_get_score(sim_tensor3, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
+        scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores1- jnp.log(params["k2"]))/jnp.log(2)+params["w3"]*(params["lam3"]*scores1- jnp.log(params["k3"]))/jnp.log(2)
+        
     else:
         scores = vv_get_score(sim_tensor, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
         scores = (params["lam"]*scores- jnp.log(params["k"]))/jnp.log(2)
@@ -105,12 +121,17 @@ def parse_arguments():
     # Optional arguments for the second set of paths
     parser.add_argument('--blosum2_path', type=str, help="Path to the second BLOSUM matrix file (optional)")
     parser.add_argument('--oh2_path', type=str, help="Path to the second OH file (optional)")
+    parser.add_argument('--blosum3_path', type=str, help="Path to the third BLOSUM matrix file (optional)")
+    parser.add_argument('--oh3_path', type=str, help="Path to the third OH file (optional)")
     parser.add_argument('--w1', type=float, default=0.5, help="Weight for the first BLOSUM and OH files (default: 0.5)")
     parser.add_argument('--w2', type=float, default=0.5, help="Weight for the second BLOSUM and OH files (default: 0.5)")
+    parser.add_argument('--w3', type=float, default=0.0, help="Weight for the second BLOSUM and OH files (default: 0.0)")
     parser.add_argument('--batch_size', type=int, default=128, help="Batch size; lower will take more time, less memory")
     parser.add_argument('--jaccard_blosum_list', type=str, default = None, help="path to list of length 100 with BLOSUM values")
     parser.add_argument('--lam2', type = float, default = None, help="lambda value for blosum2")
     parser.add_argument('--k2', type = float, default = None, help="k value for blosum2")
+    parser.add_argument('--lam3', type = float, default = None, help="lambda value for blosum3")
+    parser.add_argument('--k3', type = float, default = None, help="k value for blosum3")
     
     # Optional arguments with default values for gap penalties and output location
     parser.add_argument('--gap_open', type=float, default=-10, help="Gap opening penalty (default: -10)")
@@ -149,6 +170,11 @@ if __name__ == "__main__":
         blosum2 = np.load(args.blosum2_path).astype(float)
         if oh_d2[list(oh_d2.keys())[0]].shape[1]!=blosum2.shape[1]:
             raise ValueError(f"one-hot encoding length does not match blosum2 shape {blosum2.shape[1]}")
+    if args.blosum3_path and args.oh3_path:
+        oh_d3 = np.load(args.oh3_path)
+        blosum3 = np.load(args.blosum3_path).astype(float)
+        if oh_d3[list(oh_d3.keys())[0]].shape[1]!=blosum3.shape[1]:
+            raise ValueError(f"one-hot encoding length does not match blosum3 shape {blosum3.shape[1]}")
 
     # Set parameters
     params={}
@@ -158,11 +184,17 @@ if __name__ == "__main__":
     params["soft_aln_thresh"] = 0.5 # do not change
     params["w1"]=args.w1
     params["w2"]=args.w2
+    params["w3"]=args.w3
     params["lam"]= args.lam
     params["k"]=args.k
     params["lam2"]=args.lam2
     params["k2"]=args.k2
+    params["lam3"]=args.lam3
+    params["k3"]=args.k3
     params["use_two"] = bool(args.blosum2_path)
+    params["use_three"] = bool(args.blosum3_path)
+    if params["use_three"]:
+        params["use_two"] = False
     params["blurry"] = bool(args.jaccard_blosum_list)
     
     #check the length of jaccard blosum list; needs to be 100 now

@@ -19,7 +19,7 @@ num_lines=$(cat ${results_dir}/* | wc -l)
 division_result=$(echo "$num_lines / 11208" | bc -l)
 
 # Print out num_lines / 11209
-echo "Number of proteins with results (should be integer; should be 1442 if run on entire test set): $division_result"
+echo "Number of proteins with results (should be integer; should be 1441 if run on entire test set): $division_result"
 
 # Calculate scaling factor: 3566 * (11209 / num_lines)
 scaling_factor=$(echo "3566 * (11208 / $num_lines)" | bc -l)
