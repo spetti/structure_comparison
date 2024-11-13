@@ -1,14 +1,12 @@
 # nH_alphabetizer.py
 # J. Cool
+# Revised 10-01-2024
 
-# Usage: python nH_alphabetizer.py <weights.pt> <to_be_alphabetized.pkl> [batch_size (default 512)] [n_workers]
+# Usage: python nH_alphabetizer.py <weights.pt> <to_be_alphabetized.pkl> [--outfile_name STR] [--batch_size INT] [n_workers INT]
 # Input: model.pt (from nH_vqvae.py), to_be_alphabetized.pkl (dictionary of protein names and Lx1001-dim nHot data for each protein)
-# Output: .pkl, a dictionary with the same keys as to_be_alphabetized, but with the values replaced by the corresponding embeddings indices
-# also– a .fasta, with the same keys as to_be_alphabetized, but with the values replaced by the corresponding embeddings characters
+# Output: a .npz, a dictionary with the same keys as to_be_alphabetized, but with the values replaced by the corresponding embeddings indices as one-hot vectors
 
-# TODO: restructure output to .npz, a dict of np matrices with 1-Hot embedding representations
-
-import sys
+import argparse
 from pathlib import Path
 import pickle
 import numpy as np
@@ -46,7 +44,8 @@ class VectorQuantizer(nn.Module):
                      - 2 * torch.matmul(x, self.embedding.weight.t()))        
 
         codebook_index = torch.argmin(distances, dim=1)
-        return codebook_index # Lx1
+        codebook_index_one_hot = torch.nn.functional.one_hot(codebook_index, num_classes=self.num_embeddings)
+        return codebook_index_one_hot
     
 class VQVAE(nn.Module):
     def __init__(self, hidden_channels, embedding_dim, num_embeddings):
@@ -74,13 +73,24 @@ def load_query_protein(filepath):
     return tensor_dict
 
 # Loads the .pt model produced by nH_vqvae.py
-def load_weights(model_path, device):
-    model = VQVAE(hidden_channels=1000, embedding_dim=2, num_embeddings=20).to(device)
+def load_model(model_path, device):
+    # Load the state dict
     state_dict = torch.load(model_path, map_location=device)
+
+    # Extract the 'VQ' state dict
+    vq_state_dict = state_dict['VQ']
+    num_embeddings = vq_state_dict['embedding.weight'].size(0)
+    print(f"Num Clusters: {num_embeddings}")
+    
+    # Now initialize the model with the correct number of embeddings
+    model = VQVAE(hidden_channels=1000, embedding_dim=2, num_embeddings=num_embeddings).to(device)
+    
+    # Load the rest of the state dict into the model
     model.encoder.load_state_dict(state_dict['encoder'], strict=True)
     model.VQ.load_state_dict(state_dict['VQ'], strict=True)
-    
+
     model.eval()
+
     return model
 
 def get_embedding_indices_for_protein(protein_tensor, model, device):
@@ -110,53 +120,23 @@ def alphabetize(model, data, device, batch_size, num_workers):
 
     return embeddings_dict
 
-def save(embedding_dict, outfile_name):
-    with open(outfile_name, 'wb') as f:
-        pickle.dump(embedding_dict, f)
-
-# Returns a dictionary with the same keys as data, but with the values replaced by the corresponding embeddings characters
-# TODO: terrible style
-def alphabetize_fasta(model, data, device, batch_size, num_workers):
-    CHARACTERS = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y'] # AA alphabet
-
-    embeddings_dict = {}
-    
-    for key, protein_tensor in data.items():
-        dataset = TensorDataset(protein_tensor)
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=(device.type == 'cuda'))
-
-        embeddings_list = []
-        with torch.no_grad():
-            for batch in dataloader:
-                batch = batch[0].to(device)
-                batch_embeddings = get_embedding_indices_for_protein(batch, model, device)
-                embeddings_list.append(batch_embeddings)
-
-        embedding_indices = np.concatenate(embeddings_list, axis=0)
-
-        # Convert to characters
-        embeddings = [CHARACTERS[i] for i in embedding_indices]
-        embeddings_dict[key] = embeddings
-
-    return embeddings_dict
-
-def save_fasta(embedding_dict, outfile_name):
-    with open(outfile_name, 'w') as f:
-        for key, embeddings in embedding_dict.items():
-            f.write(f'>{key}\n')
-            embedding_str = ''.join(map(str, (item for sublist in embeddings for item in sublist)))
-            f.write(f'{embedding_str}\n')
+def save(alphabetized_dict, outfile_name):
+    np.savez(outfile_name, **alphabetized_dict)
 
 # ----- MAIN -----
 
 def main():
-    # TODO: better data validation, assertions, etc (own function)
+    parser = argparse.ArgumentParser(description='Alphabetize n-hot vectors using weights.')
+
+    parser.add_argument('weights', type=str, help='Path to the model weights (.pt)')
+    parser.add_argument('query', type=str, help='Path to the dictionary of proteins to be alphabetized (.pkl)')
+
+    parser.add_argument('--batch_size', type=int, default=512, help='Batch size (default: 512)')
+    parser.add_argument('--n_workers', type=int, default=0, help='Number of workers (default: 0)')
+    parser.add_argument('--outfile_name', type=str, help='Optional output file name')
+    args = parser.parse_args()
 
     start_time = time.time()
-
-    if len(sys.argv) < 3 or len(sys.argv) > 5:
-        print('Usage: python nH_alphabetizer.py <weights.pt> <to_be_alphabetized.pt> [batch_size (default 512)] [n_workers (default 0)]')
-        sys.exit(1)
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -165,25 +145,22 @@ def main():
     else:
         device = torch.device('cpu')
 
-    weights = sys.argv[1]
-    query = sys.argv[2]
-    batch_size = int(sys.argv[3]) if len(sys.argv) >= 4 else 128
-    n_workers = int(sys.argv[4]) if len(sys.argv) == 5 else 0 # terrible practice
-    outfile_name = f'./alphabetized/{Path(query).stem}_alphabetized_with_{Path(weights).stem}.pkl'
-    fasta_name = f'./alphabetized/{Path(query).stem}_alphabetized_with_{Path(weights).stem}.fasta'
+    weights = args.weights
+    query = args.query
+    batch_size = args.batch_size
+    n_workers = args.n_workers
+    outfile_name = args.outfile_name or f'./alphabetized/{Path(query).stem}_alphabetized_with_{Path(weights).stem}.npz'
 
     data = load_query_protein(query) # must be preprocessed as .pt
-    model = load_weights(weights, device)
+    model = load_model(weights, device)
 
-    reg_embeddings = alphabetize(model, data, device, batch_size, n_workers)
-    save(reg_embeddings, outfile_name)
-
-    fasta_embeddings = alphabetize_fasta(model, data, device, batch_size, n_workers)
-    save_fasta(fasta_embeddings, fasta_name)
+    alphabetized = alphabetize(model, data, device, batch_size, n_workers)
+    save(alphabetized, outfile_name)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
-    print(f'Alphabetized {len(data)} inputs in {elapsed_time:.2f} seconds to {outfile_name} and {fasta_name}')
+
+    print(f'Alphabetized {len(data)} inputs in {elapsed_time:.2f} seconds to {outfile_name}')
 
 if __name__ == '__main__':
     main()
