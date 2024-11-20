@@ -4,8 +4,7 @@
 
 Input data:
 
-`.pdb` files for each protein. Directory containing `.pdb` files, `/cluster/tufts/pettilab/shared/structure_comparison_data/protein_data/ProteinDB/pdb/`(?)
-
+`.pdb` files for each protein. Directory containing `.pdb` files, 
 `pairs_training.csv` - file containing training set. `/cluster/tufts/pettilab/shared/structure_comparison_data/protein_data/pairs_training.csv`
 
 Output data:
