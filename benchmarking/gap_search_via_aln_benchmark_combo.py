@@ -23,6 +23,13 @@ from utils import *
 
 # sbatch --partition=pettilab --job-name=aa_3Dn_3Di --time=10:00:00 --mem=64G --cpus-per-task=16 --gres=gpu:1 --wrap="python gap_search_via_aln_benchmark_combo.py $data/alphabets/3Di.npz $data/alphabets/3Di_blosum.npy $data/protein_data/allCACoord.npz $data/protein_data/given_validation_alignments.npz $data/protein_data/pairs_validation_lddts.csv $data/alphabets/3Di_3Dn_aa_lddt_grid.pkl $data/alphabets/graph_clusters.npz $data/alphabets/graph_clusters_blosum.npy $data/alphabets/aa.npz $data/alphabets/aa_blosum.npy" 
 
+# sbatch --partition=pettilab --job-name=dihedral_3Dn --time=10:00:00 --mem=64G --cpus-per-task=16 --gres=gpu:1 --wrap="python gap_search_via_aln_benchmark_combo.py $data/alphabets/dihedral.npz $data/alphabets/dihedral_blosum.npy $data/protein_data/allCACoord.npz $data/protein_data/given_validation_alignments.npz $data/protein_data/pairs_validation_lddts.csv $data/alphabets/dihedral_3Dn_lddt_grid.pkl  $data/alphabets/graph_clusters.npz $data/alphabets/graph_clusters_blosum.npy"
+
+# sbatch --partition=pettilab --job-name=dihedral_3Di --time=10:00:00 --mem=64G --cpus-per-task=16 --gres=gpu:1 --wrap="python gap_search_via_aln_benchmark_combo.py $data/alphabets/dihedral.npz $data/alphabets/dihedral_blosum.npy $data/protein_data/allCACoord.npz $data/protein_data/given_validation_alignments.npz $data/protein_data/pairs_validation_lddts.csv $data/alphabets/dihedral_3Di_lddt_grid.pkl  $data/alphabets/3Di.npz $data/alphabets/3Di_blosum.npy"
+
+# sbatch --partition=pettilab --job-name=dihedral_3Dn_3Di --time=10:00:00 --mem=64G --cpus-per-task=16 --gres=gpu:1 --wrap="python gap_search_via_aln_benchmark_combo.py $data/alphabets/3Di.npz $data/alphabets/3Di_blosum.npy $data/protein_data/allCACoord.npz $data/protein_data/given_validation_alignments.npz $data/protein_data/pairs_validation_lddts.csv $data/alphabets/3Di_3Dn_dihedral_lddt_grid.pkl $data/alphabets/graph_clusters.npz $data/alphabets/graph_clusters_blosum.npy $data/alphabets/dihedral.npz $data/alphabets/dihedral_blosum.npy"
+
+
 def parse_arguments():
     if len(sys.argv) not in [9,11]:
         print(len(sys.argv))
