@@ -7,10 +7,9 @@
 # Input: trainset.pt, validationset.pt (pairs of aligned nHot data) – [*, 2, 1000]
 # Output: models/<model_and_dict_name>_model.pt, codebooks/<model_and_dict_name>_codebook.pkl (decoded embeddings)
 
-# TODO: seed not working
-# TODO: better file validation and handling (argparse)
+# TODO: Fix deterministic seed...
 
-import sys
+import argparse
 from pathlib import Path
 import pickle
 
@@ -161,8 +160,8 @@ def save_for_inference(model, filename):
     torch.save(combined_state_dict, model_name)
     print(f'Model saved to {model_name}')
 
+# DEPRECIATED!
 # TODO: make this optional
-# Save the decoded codebook vectors to dict for visualization
 def save_decoded_codebook_vectors(model, device, filename):
     filename = f'./codebooks/{Path(filename).stem}_codebook.pkl'
 
@@ -220,8 +219,8 @@ NUM_EMBEDDINGS = 20
 
 # Variable parameters
 hidden_channels = 1000
-commitment_cost = 0.5
-learning_rate = 5e-4
+commitment_cost = 0.25
+learning_rate = 1e-3
 batch_size = 512
 num_epochs = 8
 
@@ -239,15 +238,21 @@ optimizer = optim.Adam(model.parameters(), learning_rate)
 criterion = nn.MSELoss()
 
 def main():
-    if len(sys.argv) != 3 and len(sys.argv) != 4 and len(sys.argv) != 5:
-        print('Usage: python nH_vqvae.py <trainset.pt> <validationset.pt> [model_and_dict_name] [seed]')
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='nH VQVAE script with optional model name and seed.')
+    
+    # Required
+    parser.add_argument('trainfile', type=str, help='Path to the training set (.pt)')
+    parser.add_argument('validationfile', type=str, help='Path to the validation set (.pt)')
+    
+    # Optional
+    parser.add_argument('--model_and_dict_name', type=str, default=None, help='Model and dictionary name (optional, defaults to trainfile)')
+    parser.add_argument('--seed', type=int, default=68, help='Random seed (optional, defaults to 68)')
+    args = parser.parse_args()
 
-    # TODO: better data validation, file handling, etc
-    trainfile = str(sys.argv[1])
-    validationfile = str(sys.argv[2])
-    model_and_dict_name = str(sys.argv[3]) if len(sys.argv) >= 4 else trainfile
-    seed = int(sys.argv[4]) if len(sys.argv) == 5 else 68 # favorite number
+    trainfile = args.trainfile
+    validationfile = args.validationfile
+    model_and_dict_name = args.model_and_dict_name if args.model_and_dict_name else trainfile
+    seed = args.seed
 
     set_seed(seed)
     

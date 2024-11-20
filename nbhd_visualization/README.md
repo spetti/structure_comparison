@@ -4,6 +4,6 @@
 
 Ensure that `num_radii_bins`, `num_theta_bins`, and `num_phi_bins` are set to correct values (they are for current 1000-dim nHots).
 
-Use the name of the your desired codebook (`<codebook.pkl>`) in the final codeblock.
+Save a codebook of shape (20, 1000) as a `[codebook_name].npy` NumPy matrix. Substitute this file in the final codeblock of `sphereProjection.ipynb`.
 
 Images, flatted against phi and against theta will be created and saved to a directory called `./plots/embeddings/`.
