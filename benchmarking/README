@@ -1,36 +1,79 @@
-Summary: nenchmarking of methods
+Summary: benchmarking of methods
 
-Description of code:
 
+Step 1: Build BLOSUM matrix + validation alignment task to narrow down space of open and extend penalties
+
+compute_BLOSUM_gaps_lam_k.py
+
+input is one-hot dictionary of all sequence in alphabet: basename.npz
+outputs: blosum matrix, basename_blosum.npz; grid search results stored as dictionary of open/extend params: list of lddts for val pairs,  basename_lddt_grid.pkl; param dictionary with k, lam basename_karlin_params.pkl
+
+To run compute_BLOSUM_gaps_lam_k.py on multiple alphabets, each saved as basename.npz in a directory called alphabet_directory, run 
+sbatch execute_compute_BLOSUM_ect.sh <alphabet_directory> 
+
+The outputs will be stored in the alphabet_directory.
+
+For combination alphabets, use gap_search_via_aln_benchmark_combo.py and for blurry vectors use gap_search_via_aln_benchmark_blurry_vectors.ipynb. See top of file for usage.
+
+
+Step 2: Select candidate open and extend penalties and run the validation search task on them
+
+These notebooks find the range of open and extend parameters that do best on the alignment task, then writes config files for the validation search task. The latter also considers different weightings of the alphabets. 
+
+process_gap_search_output.ipynb
+process_gap_search_output_combo.ipynb
+
+
+Step 3: Run the validation search task + select open and extend
+
+Given a directory of config files <val_config_file_dir> each ending in config, run the search on each by running 
+
+for file in <val_config_file_dir>/*config; do echo "$file"; sbatch execute.sh "$file"; done
+
+This will write the results of the search to <val_config_file_dir>
+
+To compute the sensitivity up to the first false positive for each combination, run 
+
+for file in <val_config_file_dir>/*_results; do echo "$file"; ./get_SUTTFFP_val.sh "$file"; done > val_results_SUTTFFP.txt
+
+The three numbers printed are teh SUTTFFP for the family, superfamily, and fold levels. We chose the hyperparameters (open, extend, and weights for combos) with the highest SUTTFFP for the super family level.
+
+
+The following jupyter notebooks analyze the validation search results and writes config files for the test search on the chosen open and extend (and weights in the case of combination alphabets):
+interpet_val_search_results.ipynb
+interpet_val_search_results_combo.ipynb
+These notebooks input the text file val_results_SUTTFFP.txt constructed as described above. 
+
+
+Step 4: Run the test search task.
+
+This is done identically to the validation search, but with different config files.
+
+Given a directory of config files <test_config_file_dir> each ending in config, run the search on each by running 
+
+for file in <test_config_file_dir>/*config; do echo "$file"; sbatch execute.sh "$file"; done
+
+This will write the results of the search to <test_config_file_dir>
+
+To compute the sensitivity up to the first false positive for each alphabet, run 
+
+for file in <test_config_file_dir>/*_results; do echo "$file"; ./get_SUTTFFP_test.sh "$file"; done
+
+
+
+Description of files:
 - utils.py: contains vectorized functions for computing a similarity matrix, an alignment, bitscores, and LDDT
+- execute.sh calls Snakefile, which executes the search benchmark by calling query_list_by_all.py, which search a list of queries against a database
+-execute_compute_BLOSUM_ect.sh calls Snakefile_compute_BLOSUM_ect, which computes BLOSUM matrix, computes Karlin parameters, and executes alignment validation task by calling compute_BLOSUM_gaps_lam_k.py. This calls gap_search_via_aln_benchmark.py
+- gap_search_via_aln_benchmark_combo.py and gap_search_via_aln_benchmark_blurry_vectors.ipynb perform the validation alignment task to narrow down the space of weights and open and extend penalties to test in the validation search task. 
+- get_SUTTFFP_test.sh and get_SUTTFFP_val.sh compute SUTTFFP by calling bench.noselfhit.awk, a Foldseek script that references the classifications given in scop_lookup.fix.tsv
+- process_gap_search_output.ipynb and process_gap_search_output_combo.ipynb find the range of open and extend parameters that do best on the alignment task, then writes config files for the validation search task. The latter also considers different weightings of the alphabets
+-interpet_val_search_results.ipynb and interpet_val_search_results_combo.ipynb select the best parameters using the results of the validation search task and write config files for the test search task
+- benchenv.yml: conda env specifications
 
-Alignment benchmark for grid search
 
-- alignment_benchmark.ipynb
 
-Search benchmark
-- query_list_by_all.py: search a list of queries against a database
 
-    python query_list_by_all.py <npz db calpha coordinate tensor> <csv of list of queries> <npy of BLOSUM matrix> <npz of db of sequences one-hot encoded> 
-
-    outputs:
-    - one file per query in the list with name <name of query> located in a folder called results (default) or whatever is specfied by the --out_location flag
-    - each file should have one line per database entry, in our case 11211 
-
-    note: 
-    - best to make the query list have similar sized proteins to optimizing batch sizes
-
-    # example usage for some BLOSUM matrix
-    python query_list_by_all.py ./data/allCACoord.npz ./data/short_test_query_list.csv ./data/nH_mat.npy ./data/nH_oh.npz --out_location test_results_3Dn
-
-    # example usage for two BLOSUM matrices
-    python query_list_by_all.py ./data/allCACoord.npz ./data/short_test_query_list.csv ./data/nH_mat.npy ./data/nH_oh.npz --blosum2_path ./data/nH_mat.npy --oh2_path ./data/nH_oh.npz --w1 1.0 --w2 1.0 --gap_open -10 --gap_extend -2 --out_location test_results_3Di_3Dn
-
-    The similarity matrix used for alignment is w1(sim matrix from first BLOSUM) + w2(sim matrix from second BLOSUM)
-    
-- Snakemake: Calls query_list_by_all
-
-- execute.sh: runs snakemake
 
 
 
