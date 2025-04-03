@@ -1,13 +1,17 @@
 Code to construct the transition matrix and blurry vectors
 
-Description of each script:
+blurryNeighborhoods.ipynb details the construction of the transition matrix based on training data, creating blurry vectors using this transition matrix, and an example visualization of alignment testing using blurry vectors.
 
-blah.py does ....
+Data dependencies:
 
-Input data:
-
-name of data, description of format, location in pettilab/shared/data_for_structure_comparison
+'pettilab/shared/structure_comparison_data/protein_data/pdb': directory containing pdb files in dali dataset
+'pettilab/shared/structure_comparison_data/protein_data/pairs_training.csv': file containing training pairs and alignments
+'pettilab/shared/structure_comparison_data/protein_data/pairs_validation.csv': file containing validation pairs and alignments
+'pettilab/shared/structure_comparison_data/protein_data/dicti_train_val_test.pkl': file containing dictionary of training, validation, and test proteins
+'pettilab/shared/structure_comparison_data/protein_data/allDaliAASequences.json': dictionary containing proteins as keys and amino acid sequence as values
+'pettilab/shared/structure_comparison_data/protein_data/allProtCACoord.pkl': dictionary containing proteins as keys and list containing coordinates of alpha carbons for each amino acid in the sequence as values
 
 Output data:
 
-name of output, description of format, location in pettilab/shared/data_for_structure_comparison
+'allProtSphericalBinsWithSecondaryStruct_nHot.pkl': dictionary with protein name as key and corresponding nHot vector as value 
+'transition_matrix.npy': transition matrix of bin states
