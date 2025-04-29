@@ -19,7 +19,7 @@ This repository contains the following folders:
 If you use this code, you are welcome to cite us.
 
 ```
-@article {blurry,
+@article {zerefa2025,
 	author = {Zerefa, Saba and Cool, Jesse and Singh, Pramesh and Petti, Samantha},
 	title = {An interpretable alphabet for local protein structure search based on amino acid neighborhoods},
 	year = {2025},
