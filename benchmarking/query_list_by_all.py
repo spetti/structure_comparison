@@ -86,13 +86,13 @@ def run_batch(query, names, params):
     if params["use_two"]:
         scores1 = vv_get_score(sim_tensor1, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
         scores2 = vv_get_score(sim_tensor2, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
-        scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores1- jnp.log(params["k2"]))/jnp.log(2)
+        scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores2- jnp.log(params["k2"]))/jnp.log(2)
             
     if params["use_three"]:
         scores1 = vv_get_score(sim_tensor1, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
         scores2 = vv_get_score(sim_tensor2, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
         scores3 = vv_get_score(sim_tensor3, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
-        scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores1- jnp.log(params["k2"]))/jnp.log(2)+params["w3"]*(params["lam3"]*scores1- jnp.log(params["k3"]))/jnp.log(2)
+        scores = params["w1"]*(params["lam"]*scores1- jnp.log(params["k"]))/jnp.log(2)+params["w2"]*(params["lam2"]*scores2- jnp.log(params["k2"]))/jnp.log(2)+params["w3"]*(params["lam3"]*scores3- jnp.log(params["k3"]))/jnp.log(2)
         
     else:
         scores = vv_get_score(sim_tensor, aln_tensor, length_pairs, params["gap_extend"], params["gap_open"])
